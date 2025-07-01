@@ -10,7 +10,7 @@ export default function HomePage() {
   const [running, setRunning] = useState(false)
   const [log, setLog] = useState('')
   const [confirmDesc, setConfirmDesc] = useState<string | null>(null)
-  // const [jsonData, setJsonData] = useState<any>(null)
+  const [jsonData, setJsonData] = useState<any>(null)
   const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null)
   const decoder = new TextDecoder()
   const logRef = useRef<HTMLPreElement>(null)
@@ -109,10 +109,10 @@ export default function HomePage() {
       <div className="p-6 grid md:grid-cols-3 gap-6">
         <div className="flex flex-col">
           <h2 className="text-xl font-bold mb-2">DSL Editor</h2>
-{/* 
+
           <input type="file" accept="application/json" ref={jsonInputRef} onChange={handleJsonFileChange} className="hidden" />
           <button onClick={handleJsonUpload} className="mb-2 px-3 py-1 bg-blue-200 hover:bg-blue-300 rounded">Upload JSON File</button>
-          {jsonData && <pre className="bg-gray-100 p-2 rounded text-sm overflow-auto max-h-40 font-mono">{JSON.stringify(jsonData, null, 2)}</pre>} */}
+          {jsonData && <pre className="bg-gray-100 p-2 rounded text-sm overflow-auto max-h-40 font-mono">{JSON.stringify(jsonData, null, 2)}</pre>}
 
           {/* File upload input (hidden) */}
           <input
