@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
+    "@prisma/client": "^6.10.1",
     "@uiw/codemirror-extensions-basic-setup": "^4.23.13",
     "monaco-editor": "^0.52.2",
     "next": "15.3.3",
