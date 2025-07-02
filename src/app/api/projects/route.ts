@@ -7,10 +7,10 @@ export async function GET() {
   return NextResponse.json(all)
 }
 
-export async function POST(request: Request) {
-  const { name, apiUrl, simUrl, dslConfig } = await request.json()
+export async function POST(req: Request) {
+  const { name, apiUrl, simUrl } = await req.json()
   const project = await prisma.project.create({
-    data: { name, apiUrl, simUrl, dslConfig }
+    data: { name, apiUrl, simUrl }
   })
   return NextResponse.json(project, { status: 201 })
 }
