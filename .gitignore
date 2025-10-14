@@ -1,0 +1,16 @@
+# Node/Next
+node_modules/
+.next/
+out/
+dist/
+*.log
+.env
+.env.*
+.env.local
+.vercel/
+.vscode/
+# Prisma
+prisma/*.db
+# macOS/Linux junk
+.DS_Store
+Thumbs.db
