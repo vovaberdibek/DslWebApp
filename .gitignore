@@ -4,13 +4,19 @@ node_modules/
 out/
 dist/
 *.log
+
+# Env
 .env
 .env.*
 .env.local
+
+# Tooling
 .vercel/
 .vscode/
+
 # Prisma
 prisma/*.db
-# macOS/Linux junk
+
+# OS junk
 .DS_Store
 Thumbs.db
