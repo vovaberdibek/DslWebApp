@@ -10,25 +10,34 @@ loader.config({
 
 const Editor = dynamic(() => import('@monaco-editor/react'), { ssr: false })
 
-export function MonacoEditor({ value, onChange }: { value: string; onChange: (v: string | undefined) => void }) {
+export function MonacoEditor({
+  value,
+  onChange,
+  className
+}: {
+  value: string
+  onChange: (v: string | undefined) => void
+  className?: string
+}) {
   const handleMount: OnMount = (editor, monaco) => {
     registerDSLLanguage(monaco)
   }
 
   return (
-    <Editor
-      height="400px"
-      defaultLanguage="mydsl"
-      value={value}
-      onMount={handleMount}
-      onChange={onChange}
-      options={{
-        minimap: { enabled: false },
-        automaticLayout: true,
-        fontFamily: 'monospace',
-        wordWrap: 'on'
-      }}
-    />
+    <div className={className}>
+      <Editor
+        height="100%"
+        defaultLanguage="mydsl"
+        value={value}
+        onMount={handleMount}
+        onChange={onChange}
+        options={{
+          minimap: { enabled: false },
+          automaticLayout: true,
+          fontFamily: 'monospace',
+          wordWrap: 'on'
+        }}
+      />
+    </div>
   )
 }
-

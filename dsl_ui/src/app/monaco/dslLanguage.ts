@@ -47,16 +47,26 @@ export function registerDSLLanguage(monacoInstance: typeof monaco) {
   });
 
   monacoInstance.languages.registerCompletionItemProvider('mydsl', {
-    provideCompletionItems: () => ({
-      suggestions: [
+    provideCompletionItems: (model, position) => {
+      const word = model.getWordUntilPosition(position);
+      const range = {
+        startLineNumber: position.lineNumber,
+        endLineNumber: position.lineNumber,
+        startColumn: word.startColumn,
+        endColumn: word.endColumn
+      };
+
+      return {
+        suggestions: [
         'Agents:', 'Locations:', 'Trays:', 'Parameters:', 'TrayStepPoses:',
         'MainPoses:', 'Assembly:'
-      ].map(w => ({
-        label: w,
-        kind: monacoInstance.languages.CompletionItemKind.Keyword,
-        insertText: w
-      }))
-    })
+        ].map(w => ({
+          label: w,
+          kind: monacoInstance.languages.CompletionItemKind.Keyword,
+          insertText: w,
+          range
+        }))
+      };
+    }
   });
 }
-

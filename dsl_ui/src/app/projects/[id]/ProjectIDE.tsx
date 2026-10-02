@@ -79,6 +79,24 @@ export default function ProjectIDE() {
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ dsl: dslText }),
     })
+    if (!res.ok) {
+      // surface init/bridge errors instead of silently failing
+      const contentType = res.headers.get('content-type') || ''
+      let message = ''
+      try {
+        if (contentType.includes('application/json')) {
+          const data = await res.json()
+          message = data.detail || data.error || JSON.stringify(data)
+        } else {
+          message = await res.text()
+        }
+      } catch (err) {
+        message = err instanceof Error ? err.message : 'Unknown error'
+      }
+      setLog(`❌ Request failed (${res.status}): ${message || res.statusText}`)
+      setRunning(false)
+      return
+    }
     if (!res.body) {
       setLog('❌ No stream returned')
       setRunning(false)
@@ -94,7 +112,14 @@ export default function ProjectIDE() {
     let buf = ''
     while (true) {
       const { done, value } = await reader.read()
-      if (done) { setRunning(false); break }
+      if (done) {
+        if (buf) {
+          // flush any trailing line that never had a newline
+          setLog(l => l + buf)
+        }
+        setRunning(false)
+        break
+      }
       buf += decoder.decode(value)
       const lines = buf.split('\n')
       buf = lines.pop()!

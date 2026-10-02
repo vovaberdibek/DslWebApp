@@ -13,7 +13,7 @@ export default function SidebarLayout({ children }: SidebarLayoutProps) {
   return (
     <div className="flex h-screen">
       <aside className={`transition-all ${open ? 'w-72' : 'w-16'} bg-gray-800 p-2`}>
-        <Button onClick={() => setOpen(o => !o)} size="sm" className="mb-4">
+        <Button onClick={() => setOpen(o => !o)} className="mb-4 px-3 py-1 text-sm">
           {open ? '←' : '→'}
         </Button>
         {open && (

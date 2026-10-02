@@ -5,9 +5,9 @@ export async function GET(
   req: Request,
   context: { params: Promise<{ id: string }> }
 ) {
-  const { params } = await context
+  const { id } = await context.params
   const project = await prisma.project.findUnique({
-    where: { id: (await params).id }
+    where: { id }
   })
   if (!project) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -19,7 +19,7 @@ export async function DELETE(
   req: Request,
   context: { params: Promise<{ id: string }> }
 ) {
-  const { params } = await context
-  await prisma.project.delete({ where: { id: params.id } })
+  const { id } = await context.params
+  await prisma.project.delete({ where: { id } })
   return NextResponse.json({ success: true })
 }
