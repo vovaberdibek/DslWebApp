@@ -99,12 +99,12 @@ export default function ProjectIDE() {
       } catch (err) {
         message = err instanceof Error ? err.message : 'Unknown error'
       }
-      setLog(`❌ Request failed (${res.status}): ${message || res.statusText}`)
+      setLog(`ERROR: Request failed (${res.status}): ${message || res.statusText}`)
       setRunning(false)
       return
     }
     if (!res.body) {
-      setLog('❌ No stream returned')
+      setLog('ERROR: No stream returned')
       setRunning(false)
       return
     }
