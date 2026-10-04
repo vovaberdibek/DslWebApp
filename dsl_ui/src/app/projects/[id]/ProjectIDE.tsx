@@ -29,7 +29,11 @@ export default function ProjectIDE() {
 
   // streaming refs
   const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null)
-  const decoder = new TextDecoder()
+  // Kept across renders and across confirm pauses: a fresh decoder per render, or
+  // dropping the unread buffer at a confirm, corrupted the "▶️ NEED_CONFIRM" lines
+  // (multi-byte emoji split between chunks) and the Yes/No buttons never appeared.
+  const decoderRef = useRef(new TextDecoder())
+  const pendingRef = useRef('')
   const logRef = useRef<HTMLPreElement>(null)
 
   // File upload ref
@@ -74,6 +78,8 @@ export default function ProjectIDE() {
     if (!project) return
     setRunning(true)
     setLog('')
+    decoderRef.current = new TextDecoder()
+    pendingRef.current = ''
     const res = await fetch(`${project.apiUrl}/run_workflow`, {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
@@ -106,35 +112,40 @@ export default function ProjectIDE() {
     streamLogs()
   }
 
-  // Read chunks, handle confirm and need-input markers
+  // Read the stream line by line; pause at confirm / need-input markers. Unread
+  // text stays in pendingRef, so the next call continues exactly where this stopped.
   const streamLogs = async () => {
     const reader = readerRef.current!
-    let buf = ''
     while (true) {
-      const { done, value } = await reader.read()
-      if (done) {
-        if (buf) {
-          // flush any trailing line that never had a newline
-          setLog(l => l + buf)
-        }
-        setRunning(false)
-        break
-      }
-      buf += decoder.decode(value)
-      const lines = buf.split('\n')
-      buf = lines.pop()!
-      for (const line of lines) {
-        if (line.startsWith('▶️ NEED_CONFIRM ')) {
-          setConfirmDesc(line.replace('▶️ NEED_CONFIRM ', ''))
+      const nl = pendingRef.current.indexOf('\n')
+      if (nl >= 0) {
+        const line = pendingRef.current.slice(0, nl)
+        pendingRef.current = pendingRef.current.slice(nl + 1)
+        const confirmAt = line.indexOf('NEED_CONFIRM ')
+        if (confirmAt >= 0) {
+          setConfirmDesc(line.slice(confirmAt + 'NEED_CONFIRM '.length))
           return
         }
-        if (line.includes('▶️ NEED_INPUT AddTray')) {
+        if (line.includes('NEED_INPUT AddTray')) {
           setNeedInput(true)        // ← show PromptModal
           return
         }
         setLog(l => l + line + '\n')
         logRef.current?.scrollTo(0, logRef.current.scrollHeight)
+        continue
       }
+      const { done, value } = await reader.read()
+      if (done) {
+        const rest = pendingRef.current + decoderRef.current.decode()
+        pendingRef.current = ''
+        if (rest) {
+          // flush any trailing line that never had a newline
+          setLog(l => l + rest)
+        }
+        setRunning(false)
+        break
+      }
+      pendingRef.current += decoderRef.current.decode(value, { stream: true })
     }
   }
 
