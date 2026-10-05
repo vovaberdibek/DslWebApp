@@ -1,40 +1,49 @@
-<<<<<<< HEAD
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# DSL UI (DREAM)
 
-## Getting Started
+Web UI of DREAM: write or upload a DSL program, run it and follow it live. The UI sends
+the DSL to the DSL bridge (`ros_http_bridge2` in the `ros2_ws` workspace), which runs it
+in the MuJoCo simulation or on the real cell.
 
-First, run the development server:
+How the whole system works, the DSL itself and all example programs: see the README of
+the workspace, `~/Desktop/ros2_ws/README.md`.
+
+## Run
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install           # once
+npm run dev           # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+or, from the workspace: `~/Desktop/ros2_ws/run_ros_stack.bash ui`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+The bridge only accepts requests from `http://localhost:3000`, so keep that port.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Settings in `.env` (not in git):
 
-## Learn More
+| Variable | What |
+|---|---|
+| `DATABASE_URL` | PostgreSQL database where the projects are stored (Prisma, `prisma/schema.prisma`) |
 
-To learn more about Next.js, take a look at the following resources:
+## Use
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. **Projects** -> **New Project**: a name and the **API URL** of the bridge,
+   `http://localhost:8000` (**Sim URL** is not used). **Add Project**, then **Open IDE**.
+2. **Upload DSL** loads a `.dsl` file into the editor (examples:
+   `~/Desktop/ros2_ws/src/ros_http_bridge2/examples/`), or type it in.
+3. **Run** sends it to the bridge; the log on the right shows every step.
+4. A yellow bar *Confirm action: ...* with **Yes** / **No** appears for steps that need a
+   confirmation (`ToConfirm`, and every PLC block in real mode).
+5. An `addTray` without a tray name opens a form that asks for the tray.
+6. **Reset** stops the run before its next step.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+The run ends with `WORKFLOW_DONE ...`, or `WORKFLOW_FAILED at step N/M ...` with the reason
+on the line above.
 
-## Deploy on Vercel
+## Bridge endpoints used
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-=======
-# DslWebApp
->>>>>>> 4f66277a4d7dcea5426043137af705cfba80b65d
+| Endpoint | When |
+|---|---|
+| `POST /run_workflow` `{dsl}` | **Run**; the answer is the live log (streamed text) |
+| `POST /confirm_response` `{ok}` | **Yes** / **No** on a `NEED_CONFIRM` line |
+| `POST /prompt_response` `{tray_name, object_name}` | the tray form on a `NEED_INPUT AddTray` line |
+| `POST /reset` | **Reset** |
