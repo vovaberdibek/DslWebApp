@@ -27,13 +27,19 @@ export default function ProjectIDE() {
   const [confirmDesc, setConfirmDesc] = useState<string | null>(null)
   const [needInput, setNeedInput] = useState(false)        // ← track NEED_INPUT
 
-  // streaming refs
-  const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null)
-  // Kept across renders and across confirm pauses: a fresh decoder per render, or
-  // dropping the unread buffer at a confirm, corrupted the "▶️ NEED_CONFIRM" lines
-  // (multi-byte emoji split between chunks) and the Yes/No buttons never appeared.
-  const decoderRef = useRef(new TextDecoder())
-  const pendingRef = useRef('')
+  // The stream of the current run: its own reader, decoder and unread text, kept
+  // across confirm pauses. A new run or Reset replaces it; a loop still reading an
+  // older stream sees that and stops. (They used to share one buffer: after a Reset
+  // the old run's loop could take the new run's NEED_CONFIRM line, so no Yes/No bar
+  // appeared, or switch "running" off/on at the wrong moment.)
+  type RunStream = {
+    reader: ReadableStreamDefaultReader<Uint8Array>
+    decoder: TextDecoder
+    pending: string
+    reading: boolean
+  }
+  const streamRef = useRef<RunStream | null>(null)
+  const [stopping, setStopping] = useState(false)
   const logRef = useRef<HTMLPreElement>(null)
 
   // File upload ref
@@ -50,21 +56,28 @@ export default function ProjectIDE() {
       .catch(() => router.push('/projects'))
   }, [id, router])
 
-  // Reset bridge (drops in-memory workflow, clears any modals)
+  // Reset: the bridge stops the run before its next step; a robot step that is
+  // running finishes first (it can take minutes). Keep reading until the run has
+  // really ended, so Run is only offered again when the bridge accepts it.
   const resetBridge = async () => {
     if (!project) return
-    await fetch(`${project.apiUrl}/reset`, { method: 'POST' })
     setConfirmDesc(null)
     setNeedInput(false)
-   // re-enable the Run button and clear any old reader
-    setRunning(false)
-    readerRef.current = null
+    await fetch(`${project.apiUrl}/reset`, { method: 'POST' }).catch(() => {})
+    if (!streamRef.current) {
+      setRunning(false)
+      return
+    }
+    setStopping(true)
+    setLog(l => l + 'Stopping: the current robot step finishes first, then the run ends.\n')
+    streamLogs()
   }
 
   // Confirm dialog handler
   const answer = async (ok: boolean) => {
     if (!project) return
     setConfirmDesc(null)
+    setLog(l => l + `-> ${ok ? 'Yes' : 'No'}\n`)
     await fetch(`${project.apiUrl}/confirm_response`, {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
@@ -76,10 +89,16 @@ export default function ProjectIDE() {
   // Kick off the workflow
   const runWorkflow = async () => {
     if (!project) return
+    const old = streamRef.current
+    if (old) {
+      streamRef.current = null
+      old.reader.cancel().catch(() => {})
+    }
     setRunning(true)
+    setStopping(false)
+    setConfirmDesc(null)
+    setNeedInput(false)
     setLog('')
-    decoderRef.current = new TextDecoder()
-    pendingRef.current = ''
     const res = await fetch(`${project.apiUrl}/run_workflow`, {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
@@ -108,44 +127,60 @@ export default function ProjectIDE() {
       setRunning(false)
       return
     }
-    readerRef.current = res.body.getReader()
+    streamRef.current = {
+      reader: res.body.getReader(),
+      decoder: new TextDecoder(),
+      pending: '',
+      reading: false,
+    }
     streamLogs()
   }
 
-  // Read the stream line by line; pause at confirm / need-input markers. Unread
-  // text stays in pendingRef, so the next call continues exactly where this stopped.
+  // Read the current run's stream line by line; pause at confirm / need-input
+  // markers (the unread text stays in the run's buffer for the next call).
   const streamLogs = async () => {
-    const reader = readerRef.current!
-    while (true) {
-      const nl = pendingRef.current.indexOf('\n')
-      if (nl >= 0) {
-        const line = pendingRef.current.slice(0, nl)
-        pendingRef.current = pendingRef.current.slice(nl + 1)
-        const confirmAt = line.indexOf('NEED_CONFIRM ')
-        if (confirmAt >= 0) {
-          setConfirmDesc(line.slice(confirmAt + 'NEED_CONFIRM '.length))
+    const s = streamRef.current
+    if (!s || s.reading) return
+    s.reading = true
+    try {
+      while (streamRef.current === s) {
+        const nl = s.pending.indexOf('\n')
+        if (nl >= 0) {
+          const line = s.pending.slice(0, nl)
+          s.pending = s.pending.slice(nl + 1)
+          const confirmAt = line.indexOf('NEED_CONFIRM ')
+          if (confirmAt >= 0) {
+            const desc = line.slice(confirmAt + 'NEED_CONFIRM '.length)
+            setConfirmDesc(desc)
+            setLog(l => l + `WAITING: answer Yes/No above: ${desc}\n`)
+            return
+          }
+          if (line.includes('NEED_INPUT AddTray')) {
+            setNeedInput(true)
+            setLog(l => l + 'WAITING: enter the tray in the form\n')
+            return
+          }
+          setLog(l => l + line + '\n')
+          logRef.current?.scrollTo(0, logRef.current.scrollHeight)
+          continue
+        }
+        const { done, value } = await s.reader.read()
+        if (streamRef.current !== s) return  // a newer run or a forced stop took over
+        if (done) {
+          const rest = s.pending + s.decoder.decode()
+          s.pending = ''
+          if (rest) setLog(l => l + rest)
+          streamRef.current = null
+          setRunning(false)
+          setStopping(false)
           return
         }
-        if (line.includes('NEED_INPUT AddTray')) {
-          setNeedInput(true)        // ← show PromptModal
-          return
-        }
-        setLog(l => l + line + '\n')
-        logRef.current?.scrollTo(0, logRef.current.scrollHeight)
-        continue
+        s.pending += s.decoder.decode(value, { stream: true })
       }
-      const { done, value } = await reader.read()
-      if (done) {
-        const rest = pendingRef.current + decoderRef.current.decode()
-        pendingRef.current = ''
-        if (rest) {
-          // flush any trailing line that never had a newline
-          setLog(l => l + rest)
-        }
-        setRunning(false)
-        break
-      }
-      pendingRef.current += decoderRef.current.decode(value, { stream: true })
+    } catch {
+      // the reader was cancelled (new run or forced stop)
+    } finally {
+      s.reading = false
     }
   }
 
@@ -155,7 +190,7 @@ export default function ProjectIDE() {
     <div className="h-full flex flex-col p-4 space-y-4">
       {/* Confirm */}
       {confirmDesc && (
-        <div className="sticky top-0 bg-yellow-900 text-white flex justify-between p-3 rounded">
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[min(90vw,960px)] shadow-xl bg-yellow-900 text-white flex justify-between items-center gap-4 p-4 rounded text-lg">
           <span>Confirm action: {confirmDesc}</span>
           <div className="space-x-2">
             <button onClick={() => answer(true)} className="bg-green-500 px-3 py-1 rounded">Yes</button>
@@ -184,7 +219,7 @@ export default function ProjectIDE() {
           </button>
           <button onClick={runWorkflow} disabled={running}
                   className={`px-4 py-1 rounded ${running ? 'bg-gray-500' : 'bg-green-600 hover:bg-green-700'} text-white`}>
-            {running ? 'Running…' : 'Run'}
+            {stopping ? 'Stopping…' : running ? 'Running…' : 'Run'}
           </button>
           <button onClick={resetBridge}
                   className="px-4 py-1 rounded bg-yellow-500 hover:bg-yellow-600 text-white ml-2">
