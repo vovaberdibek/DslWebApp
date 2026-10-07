@@ -63,9 +63,15 @@ export default function ProjectIDE() {
     if (!project) return
     setConfirmDesc(null)
     setNeedInput(false)
-    await fetch(`${project.apiUrl}/reset`, { method: 'POST' }).catch(() => {})
-    if (!streamRef.current) {
+    const reply = await fetch(`${project.apiUrl}/reset`, { method: 'POST' })
+      .then(r => r.json()).catch(() => null)
+    // The bridge has no run any more (it already ended): nothing to wait for.
+    if (!streamRef.current || (reply && reply.stopped === false)) {
+      const old = streamRef.current
+      streamRef.current = null
+      old?.reader.cancel().catch(() => {})
       setRunning(false)
+      setStopping(false)
       return
     }
     setStopping(true)
@@ -178,7 +184,14 @@ export default function ProjectIDE() {
         s.pending += s.decoder.decode(value, { stream: true })
       }
     } catch {
-      // the reader was cancelled (new run or forced stop)
+      // Cancelled by a new run (the stream is no longer current: nothing to do), or
+      // the connection broke: end this run in the UI instead of staying "Running".
+      if (streamRef.current === s) {
+        streamRef.current = null
+        setLog(l => l + 'The connection to the bridge ended; check the log above for how far the run got.\n')
+        setRunning(false)
+        setStopping(false)
+      }
     } finally {
       s.reading = false
     }
